@@ -23,7 +23,3 @@ This is a basic example which shows you how to solve a common problem:
 library(suitabilitycube)
 ## basic example code
 ```
-
-=======
-# suitabilitycube
-scripts to build a cube with metrics that support the analysis of species distribution models
