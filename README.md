@@ -48,7 +48,78 @@ library(suitabilitycube)
 
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
+### Setup
+This configuration defines the spatial, temporal, and taxonomic parameters used throughout the workflow.
+```r
+## 1. User inputs (EDIT here)
+params <- list(
+  species      = c("Bufo bufo", "Bufotes viridis", "Bombina variegata"),
+  country_name = "Italy",
+  country_iso  = "IT",
+  res_arcmin   = 2.5,
+  ssp_code     = "245",
+  gcm_model    = "BCC-CSM2-MR",
+  period       = "2041-2060",
+  outdir       = tempdir(),      # change to a persistent path if desired
+  gbif_years   = c(2010, 2020),
+  gbif_limit   = 20000,
+  cor_thr      = 0.7,
+  cor_frac     = 0.10,
+  grid_cellsize_deg = 0.25,      # ~25 km
+  grid_square      = FALSE       # FALSE = hex, TRUE = square
+)
+```
+### Data download
+Bioclimatic variables for the present period were downloaded from WorldClim, while those for the future were retrieved from CMIP6 for the selected Global Circulation Model (BCC-CSM2-MR), scenario (SSP245), and time window (2041–2060).  Both datasets were downloaded at a spatial resolution of 2.5′ (~5 km). 
+
+After download, each dataset was cropped and masked to the national boundary of Italy, retrieved with ```geodata::gadm()```. To guarantee spatial comparability, the present raster stack was aligned to the future using the custom helper function ```align_to()```, which resamples the data to a common extent, resolution, and coordinate reference system. 
+
+Following alignment, a correlation-based variable selection was applied to the present bioclimatic dataset to reduce multicollinearity among predictors. Pairwise correlations were computed on a 10% random sample of grid cells, and variables exceeding a threshold of ```r > 0.7``` were iteratively removed using the custom function ```drop_high_corr()```. 
+
+The resulting subset of predictors, ```bio3```, ```bio4```, ```bio8```, ```bio11```, ```bio14```, and ```bio16```, was retained as the final set of environmental variables. The same subset was then applied to the future dataset to ensure temporal consistency.
+
+Species occurrence records were retrieved from GBIF using the R package ```rgbif```:
+* Three amphibians: Bufo bufo, Bufotes viridis, Bombina variegata) 
+* Country = IT, 
+* Years = 2010–2020, 
+* Record cap = 20,000 per species.
+
+
+
+```r
+# country boundary
+country_vec <- geodata::gadm(params$country_name, level = 0, path = params$outdir)
+
+# present bioclimatic predictors
+bio_present <- geodata::worldclim_country(
+  country = params$country_name, var = "bio", res = params$res_arcmin, path = params$outdir
+) |> terra::crop(country_vec) |> terra::mask(country_vec)
+
+# future bioclimatic predictors
+bio_future <- geodata::cmip6_world(
+  model = params$gcm_model, ssp = params$ssp_code, time = params$period,
+  var = "bio", res = params$res_arcmin, path = params$outdir
+) |> terra::crop(country_vec) |> terra::mask(country_vec)
+
+# align_to aligns a raster stack to a target grid (bilinear)
+bio_present_aligned <- align_to(bio_present, bio_future)
+
+## 2. Variable selection (on PRESENT)
+cor_res   <- drop_high_corr(bio_present_aligned, thr = params$cor_thr, frac = params$cor_frac)
+cmat      <- cor_res$cor
+vars_keep <- cor_res$selected
+vars_drop <- cor_res$dropped
+
+# keep same variables in the future
+bio_present_sel <- bio_present_aligned[[vars_keep]]
+bio_future_sel  <- bio_future[[vars_keep]]
+
+plot(bio_present_sel)
+
+## 3. GBIF occurrences --------------------------------------------------------
+occ_list <- gbif_occ_list(params$species, params$country_iso, params$gbif_years, params$gbif_limit)
+
+```
 
 ``` r
 library(suitabilitycube)
