@@ -8,6 +8,7 @@
 #' @param bw Bandwidth for KDE (as from compute_global_bw()).
 #' @param spp Samples per point passed to hypervolume_gaussian.
 #' @return Numeric hypervolume volume, or NA_real_ on failure.
+#' @export
 hyp_calc <- function(env_df, bw, spp = 50L) {
   X <- as.matrix(env_df)
 

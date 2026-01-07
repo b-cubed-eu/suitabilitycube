@@ -9,6 +9,7 @@
 #' @param pred_vars Character vector of predictor variable names to keep.
 #'
 #' @return A data.frame of predictor values at occurrences.
+#' @export
 extract_predictors_at_points <- function(rst, occ_sf, pred_vars) {
   if (!is.na(sf::st_crs(occ_sf)) && !is.na(terra::crs(rst)) &&
       sf::st_crs(occ_sf)$wkt != terra::crs(rst)) {

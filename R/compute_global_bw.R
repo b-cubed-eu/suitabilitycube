@@ -5,6 +5,7 @@
 #'
 #' @param env_df A data.frame of (numeric) standardized predictors.
 #' @return A numeric bandwidth (scalar or vector as returned by the estimator).
+#' @export
 compute_global_bw <- function(env_df) {
   bw <- try(hypervolume::estimate_bandwidth(as.matrix(env_df)), silent = TRUE)
   if (inherits(bw, "try-error") || any(!is.finite(bw))) 1 else bw

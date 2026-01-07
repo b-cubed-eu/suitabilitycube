@@ -6,6 +6,7 @@
 #'
 #' @param df A data.frame of predictors.
 #' @return A data.frame with transformed numeric columns.
+#' @export
 z_transform <- function(df) {
   df[] <- lapply(df, function(col) {
     if (is.numeric(col)) {

@@ -8,6 +8,7 @@
 #' @param new_future terra::SpatRaster of predictors for the future.
 #'
 #' @return A list with elements "present" and "future", each being CAST::aoa output.
+#' @export
 compute_aoa_pair <- function(env_train_df, new_present, new_future) {
   keep <- vapply(env_train_df, function(x) is.numeric(x) && stats::sd(x, na.rm = TRUE) > 0, logical(1))
   trn  <- env_train_df[, keep, drop = FALSE]
