@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 # suitabilitycube
 
@@ -23,3 +24,7 @@ library(suitabilitycube)
 ## basic example code
 ```
 
+=======
+# suitabilitycube
+scripts to build a cube with metrics that support the analysis of species distribution models
+>>>>>>> 6d9e2498271c640420e9b65eb1df1e4b33072915
