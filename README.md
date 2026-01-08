@@ -220,7 +220,95 @@ This phase organizes all previously computed indicators, HV, DI and AOA, into a 
 * ```build_hv_cube```: generates the hypervolume cube by inserting scalar niche-size values per species
 * ```merge_cubes```: combines all indicator cubes into a single multi-attribute data cube aligned by dimensions
 
+The process is made by the following steps, that aim to reduce the dimensionality and compress all the information in a single, reproducible object: 
+1. Define grid parameters
+2. Download and prepare the country boundary
+3. Build the spatial grid
+4. Raster-to-grid aggregation
+5. Aggregate indicators by cell, species and time
+6. Integrate Hypervolume
+7. Merge all indicators into a single multi-attribute cube 
 
+```r
+# inputs & grid params
+species_vec  <- params$species
+cellsize_deg <- params$grid_cellsize_deg
+make_square  <- isTRUE(params$grid_square)
 
+# country boundary (sf)
+country_vec <- if (exists("prelim")) prelim$country_vec else geodata::gadm(params$country_name, 0, params$outdir)
+country_sf  <- sf::st_as_sf(country_vec) |> sf::st_buffer(0)
 
+# build the cell grid
+grid_cells <- sf::st_make_grid(country_sf, cellsize = cellsize_deg,
+                               what = "polygons", square = make_square) |>
+  sf::st_as_sf() |>
+  dplyr::mutate(cell = seq_len(dplyr::n()))
+sf::st_crs(grid_cells) <- 4326
 
+# keep only species that actually have AOA/DI
+species_vec <- species_vec[species_vec %in% names(aoa_di_by_species) & !vapply(aoa_di_by_species, is.null, TRUE)]
+stopifnot(length(species_vec) > 0)
+
+AOA_cube <- build_metric_cube(
+  aoa_di_by_species = aoa_di_by_species,
+  species_vec = species_vec,
+  grid_cells = grid_cells,
+  metric = "AOA"
+)
+
+DI_cube <- build_metric_cube(
+  aoa_di_by_species = aoa_di_by_species,
+  species_vec = species_vec,
+  grid_cells = grid_cells,
+  metric = "DI"
+)
+
+## build HV cube (present only; NA in future), aligned to AOA/DI
+dims  <- stars::st_dimensions(AOA_cube)   # reuse geometry + labels
+shape <- dim(AOA_cube$AOA)                # c(n_cell, n_taxa, n_time)
+
+# gather HV scalars in species order (missing species → NA)
+hv_vals <- vapply(species_vec, function(sp) as.numeric(hv_by_species[[sp]]), numeric(1))
+hv_arr  <- array(NA_real_, shape,
+                 dimnames = list(NULL, dims$taxon$values, dims$time$values))
+i_present <- match("present", dims$time$values)
+for (j in seq_along(species_vec)) hv_arr[, j, i_present] <- hv_vals[j]
+
+HV_cube <- stars::st_as_stars(list(HV = hv_arr), dimensions = dims)
+
+## merge into final multi-attribute cube
+data_cube <- c(AOA_cube, DI_cube, HV_cube)
+data_cube <- stars::st_set_dimensions(data_cube, "taxon", values = species_vec)
+data_cube <- stars::st_set_dimensions(data_cube, "time",  values = c("present","future"))
+
+# sanity check
+print(stars::st_dimensions(data_cube))
+#       from   to refsys point                                                        values
+# cell     1 2744 WGS 84 FALSE POLYGON ((6.487442 35.496...,...,POLYGON ((18.61244 46.971...
+# taxon    1    3     NA    NA       Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     1    2     NA    NA                                              present, future
+```
+### Output
+The workflow produces a multi-attribute environmental data cube, implemented as a ```stars``` object in R.
+The cube integrates the three indicators, Area of Applicability, Environmental Distance, and Hypervolume, into a single, coherent structure that supports spatial, temporal, and taxonomic analysis of model-related indicators.
+The cube has three dimensions: ```cell```, ```taxon```, and ```time```, corresponding respectively to spatial grid units, species, and temporal steps (present and future). Each cell contains the computed attributes.
+
+* **AOA** (binary): identifies areas within or outside the model’s environmental domain
+* **DI** (continuous): quantifies how distant local environmental conditions are from those represented in the training data
+* **HV** (scalar per species): describes the niche breadth, available only for the present period
+```r
+# stars summary (concise)
+print(data_cube)
+# stars object with 3 dimensions and 3 attributes
+# attribute(s):
+#              Min.     1st Qu.       Median         Mean      3rd Qu.       Max.  NA's
+# AOA  0.000000e+00    0.000000    0.0000000    0.2378368    0.0000000    1.00000 11490
+# DI   1.331202e-02    0.264708    0.4212397    0.4879698    0.6308022    3.31862 11490
+# HV   1.482359e+03 1482.359428 1728.8683041 1697.5604886 1881.4537340 1881.45373  8232
+# dimension(s):
+#       from   to refsys point                                                        values
+# cell     1 2744 WGS 84 FALSE POLYGON ((6.487442 35.496...,...,POLYGON ((18.61244 46.971...
+# taxon    1    3     NA    NA       Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     1    2     NA    NA                                              present, future 
+```
