@@ -110,6 +110,9 @@ cmat      <- cor_res$cor
 vars_keep <- cor_res$selected
 vars_drop <- cor_res$dropped
 
+# align names (do this once right after creating bio_future)
+names(bio_future) <- names(bio_present_aligned)
+
 # keep same variables in the future
 bio_present_sel <- bio_present_aligned[[vars_keep]]
 bio_future_sel  <- bio_future[[vars_keep]]
@@ -121,7 +124,103 @@ occ_list <- gbif_occ_list(params$species, params$country_iso, params$gbif_years,
 
 ```
 
+### Hypervolume
+In this workflow, the hypervolume is empirically estimated from observed species occurrences and their associated environmental predictors. The computation is performed using the R package ```hypervolume``` (Blonder et al., 2018), which applies a Gaussian kernel density estimation (KDE) method (```hypervolume_gaussian```) to model the probability density of species occurrences in environmental space. The hypervolume is computed only for the present period, as it depends on empirical occurrences that are not available for future conditions and could be affected by dispersal limitations or niche shifts.
+
+* ```extract_predictors_at_points```: extracts raster values at point locations, keeps only selected predictor variables, removes rows with missing values, and drops numeric predictors with zero variance.
+* ```z_transform```: numeric columns are standardized (mean 0, sd 1). Missing values are replaced with the column mean prior to standardization. Columns with zero variance become all zeros
+* ```compute_global_bw```: uses ```hypervolume::estimate_bandwidth``` on the predictor matrix. Returns 1 if estimation fails or produces non-finite values.
+* ```hyp_calc```: computes a Gaussian hypervolume using ```hypervolume::hypervolume_gaussian``` and returns the volume. Returns NA if there are insufficient unique points or if the computation fails.
+* Wrapper loop: iterates over all species to compute individual hypervolume values for the present period
+
 ``` r
-library(suitabilitycube)
-## basic example code
+pred_vars_present <- names(bio_present_sel)
+hv_by_species     <- setNames(vector("list", length(params$species)), params$species)
+
+# hypervolume calculation
+for (sp in params$species) {
+  occ_sf <- occ_list[[sp]]
+  if (is.null(occ_sf) || nrow(occ_sf) == 0) { hv_by_species[[sp]] <- NA_real_; next }
+  train_df  <- extract_predictors_at_points(bio_present_sel, occ_sf, pred_vars_present)
+  if (nrow(train_df) < (ncol(train_df)+1L)) { hv_by_species[[sp]] <- NA_real_; next }
+  z_df <- z_transform(train_df)
+  hv_by_species[[sp]] <- hyp_calc(z_df, compute_global_bw(z_df))
+}
+
+# output 
+hv_by_species
+
+# $`Bufo bufo`
+# [1] 1728.868
+
+# $`Bufotes viridis`
+# [1] 1482.359
+
+# $`Bombina variegata`
+# [1] 1881.454
 ```
+
+### AOA and DI
+A set of functions was implemented to automate the computation of DI and the AOA for each species. Some functions overlap with those used for hypervolume estimation, ensuring consistency across indicators.
+* ```extract_predictors_at_points```: extracts environmental variable values from raster layers at species occurrence locations (also used in Hypervolume computation)
+* ```z_transform```: standardizes environmental predictors to make them comparable across variables (shared with Hypervolume workflow)
+* ```compute_aoa_pair```: computes the 	DI for both present and future environmental rasters using ```CAST::aoa()```, which simultaneously derives the DI and the corresponding AOA.
+* Wrapper loop: iterates over all species to compute per-species DI and AOA values for the present and future periods, skipping species with insufficient training data.
+
+```r
+aoa_di_by_species <- setNames(vector("list", length(params$species)), params$species)
+
+for (sp in params$species) {
+  occ_sf <- occ_list[[sp]]
+  if (is.null(occ_sf) || nrow(occ_sf) == 0) { aoa_di_by_species[[sp]] <- NULL; next }
+  train_df <- extract_predictors_at_points(bio_present_sel, occ_sf, pred_vars_present)
+  if (nrow(train_df) < 5 || ncol(train_df) < 1) { aoa_di_by_species[[sp]] <- NULL; next }
+  aoa_di_by_species[[sp]] <- compute_aoa_pair(train_df, new_present = bio_present_sel, new_future = bio_future_sel)
+}
+
+# output of one species and one scenario
+aoa_di_by_species$`Bufo bufo`$present
+
+# DI:
+# class       : SpatRaster 
+# dimensions  : 278, 285, 1  (nrow, ncol, nlyr)
+# resolution  : 0.04166667, 0.04166667  (x, y)
+# extent      : 6.625, 18.5, 35.5, 47.08333  (xmin, xmax, ymin, ymax)
+# coord. ref. : lon/lat WGS 84 (EPSG:4326) 
+# source(s)   : memory
+# varname     : wc2.1_2.5m_bioc_BCC-CSM2-MR_ssp245_2041-2060 
+# name        :       DI 
+# min value   : 0.000000 
+# max value   : 2.289293 
+
+# AOA:
+# class       : SpatRaster 
+# dimensions  : 278, 285, 1  (nrow, ncol, nlyr)
+# resolution  : 0.04166667, 0.04166667  (x, y)
+# extent      : 6.625, 18.5, 35.5, 47.08333  (xmin, xmax, ymin, ymax)
+# coord. ref. : lon/lat WGS 84 (EPSG:4326) 
+# source(s)   : memory
+# varname     : wc2.1_2.5m_bioc_BCC-CSM2-MR_ssp245_2041-2060 
+# name        : AOA 
+# min value   :   0 
+# max value   :   1 
+
+
+# Predictor Weights:
+#  wc2.1_30s_bio_3 wc2.1_30s_bio_4 wc2.1_30s_bio_8 wc2.1_30s_bio_11 wc2.1_30s_bio_14 wc2.1_30s_bio_16
+# 1               1               1               1                1                1                1
+
+# AOA Threshold: 0.1816886
+```
+
+### Cube building
+This phase organizes all previously computed indicators, HV, DI and AOA, into a unified, multidimensional structure that enables consistent spatial, temporal, and taxonomic analysis. The resulting cube is implemented in R using the ```stars``` package, which supports multidimensional data aligned by space, time, and species. Custom functions developed for this workflow are: 
+* ```as_stars_on_grid```: aggregates raster values to polygon grid cells and converts outputs to stars format
+* ```build_metric_cube```: builds multi-dimensional stars cubes (AOA or DI) by aggregating indicators across species and time
+* ```build_hv_cube```: generates the hypervolume cube by inserting scalar niche-size values per species
+* ```merge_cubes```: combines all indicator cubes into a single multi-attribute data cube aligned by dimensions
+
+
+
+
+
