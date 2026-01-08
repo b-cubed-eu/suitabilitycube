@@ -312,3 +312,85 @@ print(data_cube)
 # taxon    1    3     NA    NA       Bufo bufo        , Bufotes viridis  , Bombina variegata
 # time     1    2     NA    NA                                              present, future 
 ```
+
+### Basic usage
+Some ways the data cube can be used. 
+#### Locate a cell for a given coordinate
+``` r
+# Define a point (lon, lat) in EPSG:4326
+pt <- st_sf(geometry = st_sfc(st_point(c(12.5, 42.5)), crs = 4326))
+
+# Which grid cell contains the point?
+which_cell <- suppressWarnings(st_join(pt, grid_cells, join = st_intersects))
+if (is.na(which_cell$cell)) {
+   message("❌ This point is NOT within the study area.")
+ } else {
+   cell_id <- which_cell$cell
+   message(sprintf("✅ Point falls inside cell #%d", cell_id))
+ }
+
+# ✅ Point falls inside cell #1361
+```
+#### Basic introspection and slice
+``` r
+# Spatial extent of the cube (bbox of all cells)
+st_bbox(data_cube)
+#     xmin      ymin      xmax      ymax 
+#  6.362442 35.280385 18.737442 47.476909
+
+# Slice example (confirm dims order): [cell, taxon, time]
+# AOA & DI arrays’ shape
+dim(data_cube[c("AOA","DI")])
+#  cell taxon  time 
+#  2744     3     2
+
+# Cell 1361, both species, PRESENT (time = 1)
+data_cube[,1361, , 1]
+# stars object with 3 dimensions and 3 attributes
+# attribute(s):
+#             Min.      1st Qu.       Median         Mean      3rd Qu.         Max.
+# AOA     0.000000    0.5000000    1.0000000    0.6666667    1.0000000    1.0000000
+# DI      0.110227    0.2728768    0.4355265    0.3324929    0.4436258    0.4517251
+# HV   1482.359428 1605.6138659 1728.8683041 1697.5604886 1805.1610191 1881.4537340
+# dimension(s):
+#       from   to refsys point                                                  values
+# cell  1361 1361 WGS 84 FALSE                          POLYGON ((12.49 42.43, 12.3...
+# taxon    1    3     NA    NA Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     1    1     NA    NA                                                 present
+
+# Cell 1361, both species, FUTURE (time = 2)
+data_cube[,1361, , 2]
+# stars object with 3 dimensions and 3 attributes
+# attribute(s):
+#           Min.  1st Qu.    Median      Mean   3rd Qu.      Max. NA's
+# AOA  0.0000000 0.000000 0.0000000 0.0000000 0.0000000 0.0000000    0
+# DI   0.4322593 0.491639 0.5510188 0.5707859 0.6400492 0.7290795    0
+# HV          NA       NA        NA       NaN        NA        NA    3
+# dimension(s):
+#       from   to refsys point                                                  values
+# cell  1361 1361 WGS 84 FALSE                          POLYGON ((12.49 42.43, 12.3...
+# taxon    1    3     NA    NA Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     2    2     NA    NA                                                  future
+``` 
+#### Build a pairwise DI-difference cube (cell x comparison x time)
+
+``` r
+# Example: all pairwise differences (default)
+DI_diff_cube <- build_DI_diff_cube(data_cube)
+DI_diff_cube
+# stars object with 3 dimensions and 1 attribute
+# attribute(s):
+#               Min.    1st Qu.     Median       Mean    3rd Qu.     Max.  NA's
+# DI_diff  -2.324056 -0.3697294 -0.2008167 -0.2330901 -0.0707122 1.761329 11490
+# dimension(s):
+#           from   to refsys point
+# cell          1 2744 WGS 84 FALSE
+# comparison    1    3     NA    NA
+# time          1    2     NA    NA
+#                                                                                                                  values
+# cell                                                       POLYGON ((6.487442 35.496...,...,POLYGON ((18.61244 46.971...
+# comparison Bufo bufo - Bufotes viridis        , Bufo bufo - Bombina variegata      , Bufotes viridis - Bombina variegata
+# time                                                                                                    present, future
+```
+``` 
+
