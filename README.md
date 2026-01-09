@@ -375,7 +375,7 @@ data_cube[,1361, , 2]
 # time     2    2     NA    NA                                                  future
 ``` 
 #### Build a pairwise DI-difference cube (cell x comparison x time)
-
+Creates a new cube that expresses the difference in environmental dissimilarity between species, per cell and time step, highlighting which species occupy more novel environmental conditions.
 ``` r
 # Example: all pairwise differences (default)
 DI_diff_cube <- build_DI_diff_cube(data_cube)
@@ -394,5 +394,185 @@ DI_diff_cube
 # comparison Bufo bufo - Bufotes viridis        , Bufo bufo - Bombina variegata      , Bufotes viridis - Bombina variegata
 # time                                                                                                    present, future
 ```
-``` 
+#### Plot DI differences for a single cell 
+Visualizes pairwise DI contrasts within one location, showing which species experience greater environmental distance in the present and future.
+
+``` r
+cell_id <- 1361
+slice_diff <- DI_diff_cube[, cell_id, , drop = FALSE]
+df_diff <- as.data.frame(slice_diff) |> select(comparison, time, DI_diff)
+
+df_diff
+#                            comparison    time     DI_diff
+# 1         Bufo bufo - Bufotes viridis present -0.34149807
+# 2       Bufo bufo - Bombina variegata present -0.32529955
+# 3 Bufotes viridis - Bombina variegata present  0.01619852
+# 4         Bufo bufo - Bufotes viridis  future -0.11875951
+# 5       Bufo bufo - Bombina variegata  future -0.29682030
+# 6 Bufotes viridis - Bombina variegata  future -0.17806079
+```
+#### Summarize AOA coverage
+Calculates the proportion of the study area that falls inside or outside the Area of Applicability for each species and time period.
+``` r
+aoa_df <- as.data.frame(data_cube["AOA"]) |>
+  select(taxon, time, AOA) |>
+  mutate(AOA = as.integer(round(AOA)))  # ensure 0/1
+
+aoa_counts <- aoa_df |>
+  group_by(taxon, time, AOA) |>
+  summarise(n_cells = n(), .groups = "drop")
+
+print(head(aoa_counts))
+# A tibble: 6 × 4
+#   taxon     time      AOA n_cells
+#   <fct>     <fct>   <int>   <int>
+# 1 Bufo bufo present     0     309
+# 2 Bufo bufo present     1     533
+# 3 Bufo bufo present    NA    1902
+# 4 Bufo bufo future      0     810
+# 5 Bufo bufo future      1       6
+# 6 Bufo bufo future     NA    1928
+```
+### Application to SDMs
+After constructing and exploring the multi-attribute environmental cube, the next step is to connect these indicators to an actual species distribution model (SDM).
+We employ the R package ```dismo``` (Hijmans et al., 2023), one of the most established frameworks for building and evaluating SDMs.
+
+We use ```dismo``` to fit a simple SDM as a proof of concept, generating a continuous suitability surface that can then be incorporated into the existing cube. The goal is not model optimization but to show how such predictions can be spatially aligned and aggregated in the same grid structure used for the AOA and DI metrics. A key advantage of this integrated approach is the ability to mask or “clip” model predictions according to the Area of Applicability (AOA). Since the AOA identifies regions of environmental space similar to those seen during model training, restricting predictions to within this area effectively filters out extrapolations beyond the model’s domain of validity. 
+
+This step transforms the SDM from a purely predictive surface into a context-aware product, in which suitability values are interpreted only where the underlying environmental relationships are supported by the data.
+This section illustrates:
+* How an SDM output can be aligned with the cube’s spatial structure
+* How it can be aggregated with the main cube
+* How the AOA mask can be applied to highlight the parts of the prediction that are environmentally valid, turning the cube into a coherent framework that combines modeling, uncertainty, and applicability within a single data object
+
+**No new functions are introduced in this section**. The process reuses the previously defined helper ```as_stars_on_grid```.
+
+#### SDM fitting and alignment with SC's structure
+For each species (here: Bufo bufo, Bufotes viridis, Bombina variegata):
+* Extract GBIF occurrences from the previously downloaded dataset (```occ_list```), and ensure they are in geographic coordinates (EPSG:4326)
+* Extract coordinates (```lon```, ```lat```) from the spatial object to create a numeric matrix compatible with ```dismo``` functions
+* Fit the BIOCLIM model using the ```bioclim()``` function, which takes a stack of environmental predictors and the occurrence coordinates as input
+* Generate suitability predictions for both the present and future climate scenarios using ```raster::predict()```. The output is a continuous raster surface where each cell’s value ranges from 0 (unsuitable) to 1 (highly suitable).
+This process is repeated for all target species, producing two raster outputs per species (present and future suitability).
+
+```r
+library(dismo)
+
+# climatic predictors for SDM
+env_present_rs <- raster::stack(bio_present_sel)
+env_future_rs  <- raster::stack(bio_future_sel)
+
+## Example for: Bufo bufo
+# 1.1 Extract occurrence points (sf) for Bufo bufo
+occ_bufo <- occ_list[["Bufo bufo"]]
+
+# 1.2 Force to WGS84 lon/lat coordinates (EPSG:4326)
+occ_bufo <- st_transform(occ_bufo, crs = "EPSG:4326")
+
+# 1.3 Extract lon/lat matrix for dismo
+pres_xy_bufo <- st_coordinates(occ_bufo)
+
+# 1.4 Fit a simple BIOCLIM SDM using current climate predictors
+bc_bufo <- dismo::bioclim(env_present_rs, pres_xy_bufo)
+
+# 1.5 Predict habitat suitability under present climate
+suit_present_bufo <- raster::predict(env_present_rs, bc_bufo)
+
+# 1.6 Predict habitat suitability under future climate
+suit_future_bufo  <- raster::predict(env_future_rs,  bc_bufo)
+```
+#### Build suitability cube
+The suitability maps produced by the SDMs are then converted into a unified stars data cube. This step ensures that predicted suitability values are expressed on the same spatial grid and share the same species (```taxon```) and temporal (```time```) dimensions as the environmental indicators. The resulting cube enables consistent comparison and masking operations across indicators. 
+
+1. Define species order. The vector ```species_vec``` is defined and checked to ensure that all species appear in the correct order across analyses
+2. Organize SDM outputs. Suitability rasters from the BIOCLIM models are grouped into two lists: one for present conditions and one for future conditions
+3. Aggregate to the analysis grid. Each raster is aggregated over the polygon grid previously created using the helper ```as_stars_on_grid```
+4. Stack species along the taxon dimension. The aggregated suitability layers for each time period are stacked into two separate cubes, one for the present and one for the future
+5. Combine time periods. The present and future cubes are merged along a new "time" dimension
+6. Finalize structure. Dimension names and attribute labels are standardized, and the final cube contains a single attribute, ```suitability```
+
+```r
+# 2.1 Species order (must match everything else in the project)
+species_vec <- params$species
+stopifnot(all(species_vec == c("Bufo bufo", "Bufotes viridis", "Bombina variegata")))
+
+# 2.2 Put all suitability rasters into named lists (one for present, one for future)
+#     NOTE: these are RasterLayer objects right now
+suitability_present_list <- list(
+  "Bufo bufo"              = suit_present_bufo,
+  "Bufotes viridis"        = suit_present_viridis,
+  "Bombina variegata"  = suit_present_bombina
+)
+
+suitability_future_list <- list(
+  "Bufo bufo"              = suit_future_bufo,
+  "Bufotes viridis"        = suit_future_viridis,
+  "Bombina variegata"  = suit_future_bombina
+)
+
+# 2.3 Aggregate suitability to the analysis grid for each species and time.
+suit_present_grid_list <- lapply(species_vec, function(sp) {
+  as_stars_on_grid(
+    sr   = terra::rast(suitability_present_list[[sp]]),  # RasterLayer -> SpatRaster
+    grid = grid_cells,                                   # sf grid of polygons (cell IDs)
+    fun  = mean,                                         # average suitability per grid cell
+    name = "suitability",
+    na.rm = TRUE
+  )
+})
+
+suit_future_grid_list <- lapply(species_vec, function(sp) {
+  as_stars_on_grid(
+    sr   = terra::rast(suitability_future_list[[sp]]),
+    grid = grid_cells,
+    fun  = mean,
+    name = "suitability",
+    na.rm = TRUE
+  )
+})
+
+# 2.4 Stack species along a new "taxon" dimension for PRESENT
+suit_present_cube <- do.call(c, suit_present_grid_list) |>
+  stars::st_redimension() |>
+  stars::st_set_dimensions(2, values = species_vec, names = "taxon")
+
+# 2.5 Stack species along "taxon" for FUTURE
+suit_future_cube <- do.call(c, suit_future_grid_list) |>
+  stars::st_redimension() |>
+  stars::st_set_dimensions(2, values = species_vec, names = "taxon")
+
+# 2.6 Stack PRESENT and FUTURE along a new "time" dimension
+suit_cube <- c(
+  suit_present_cube,
+  suit_future_cube,
+  along = list(time = c("present", "future"))
+)
+
+# 2.7 Make sure dimension names and attribute name are clean/standard
+suit_cube <- stars::st_set_dimensions(suit_cube, 1, names = "cell")
+names(suit_cube) <- "suitability"
+
+suit_cube
+# stars object with 3 dimensions and 1 attribute
+# attribute(s):
+#              Min.     1st Qu.     Median       Mean    3rd Qu.      Max.  NA's
+# suitability     0 0.003060778 0.02060117 0.05087812 0.06768169 0.4950672 11490
+# dimension(s):
+#      from   to refsys point                                                        values
+# cell     1 2744 WGS 84 FALSE POLYGON ((6.487442 35.496...,...,POLYGON ((18.61244 46.971...
+# taxon    1    3     NA    NA       Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     1    2     NA    NA                                              present, future 
+```
+#### Merge suitability into the global data cube
+After building the standalone suitability cube (suit_cube), this step integrates it into the main ```data_cube``` that already contains AOA, environmental distance (DI), and hypervolume (HV). The goal is to obtain a single multi-attribute cube where all indicators, including modeled suitability, are co-located in the same data structure.
+* **Match dimensions**. The taxonomic (taxon) and temporal (time) dimensions of suit_cube are explicitly aligned to those already defined in data_cube. 
+* **Concatenate cubes**. The suitability cube is then appended to the existing data_cube using c(...).
+* **Sanity check**. The dimensions of the updated data_cube are inspected, and the attribute names are printed to verify that "suitability" is now part of the object.
+The result is a single, enriched data_cube that stores:
+1. Spatial cells.
+2. Species.
+3. Time steps.
+Multiple attributes: AOA, DI, HV, suitability.
+
+This unified structure can then be queried, sliced, plotted, or summarized as one coherent object.
 
