@@ -314,8 +314,9 @@ print(data_cube)
 ```
 
 ### Basic usage
-Some ways the data cube can be used. 
+This multidimensional structure allows the exploration, visualization, and comparison of ecological indicators across locations, species, and time, while maintaining full alignment between environmental and spatial data. Some ways the data cube can be used. 
 #### Locate a cell for a given coordinate
+Identifies which grid cell a given geographic coordinate belongs to and displays it on a map for visual inspection.
 ``` r
 # Define a point (lon, lat) in EPSG:4326
 pt <- st_sf(geometry = st_sfc(st_point(c(12.5, 42.5)), crs = 4326))
@@ -332,6 +333,7 @@ if (is.na(which_cell$cell)) {
 # ✅ Point falls inside cell #1361
 ```
 #### Basic introspection and slice
+Examine the cube’s organization, dimensions, and extent, enabling the inspection of selected indicators or specific subsets.
 ``` r
 # Spatial extent of the cube (bbox of all cells)
 st_bbox(data_cube)
