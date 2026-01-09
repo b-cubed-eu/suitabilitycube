@@ -575,4 +575,78 @@ The result is a single, enriched data_cube that stores:
 Multiple attributes: AOA, DI, HV, suitability.
 
 This unified structure can then be queried, sliced, plotted, or summarized as one coherent object.
+```r
+# 3.1 Align taxon/time labels to match the existing data_cube
+suit_cube <- stars::st_set_dimensions(
+  suit_cube,
+  "taxon",
+  values = stars::st_dimensions(data_cube)$taxon$values
+)
 
+suit_cube <- stars::st_set_dimensions(
+  suit_cube,
+  "time",
+  values = stars::st_dimensions(data_cube)$time$values
+)
+
+# 3.2 Add "suitability" as a new attribute/band in data_cube
+data_cube <- c(data_cube, suit_cube)
+
+# Check that dimensions are still what we expect
+print(stars::st_dimensions(data_cube))
+
+#       from   to refsys point                                                        values
+# cell     1 2744 WGS 84 FALSE POLYGON ((6.487442 35.496...,...,POLYGON ((18.61244 46.971...
+# taxon    1    3     NA    NA       Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     1    2     NA    NA                                              present, future
+```
+#### Apply AOA mask to SDM
+Species distribution models often produce suitability predictions across the entire study area, including regions where extrapolation occurs beyond the environmental conditions used for model calibration. AOA identifies whether predictions fall within a known environmental space (```AOA = 1```) or outside it (```AOA = 0```).
+* **Align dimensions**. The taxonomic and temporal dimensions of the suitability cube (```suit_cube```) are aligned with those of the AOA cube (```AOA_cube```) using ```st_set_dimensions```, ensuring element-wise correspondence between arrays.
+* **Apply masking**. The suitability array is filtered using the AOA array: values outside the AOA (```AOA = 0``` or missing) are replaced with ```NA```.
+* **Rebuild the masked cube**. A new ```stars``` object, ```suit_cube_masked```, is generated from the masked array while preserving the same spatial, taxonomic, and temporal dimensions as the original suitability cube.
+The resulting ```suit_cube_masked``` retains suitability values only where the SDM operates within environmentally supported conditions. This step connects model predictions (“what the model predicts”) with their environmental validity (“where the model should be trusted”), providing a spatially explicit assessment of model transferability and reliability.
+```r
+# 4.1 First, be sure suit_cube and AOA_cube share the same dimension labels
+suit_cube <- stars::st_set_dimensions(
+  suit_cube,
+  "taxon",
+  values = stars::st_dimensions(AOA_cube)$taxon$values
+)
+
+suit_cube <- stars::st_set_dimensions(
+  suit_cube,
+  "time",
+  values = stars::st_dimensions(AOA_cube)$time$values
+)
+
+
+# 4.2 Extract raw arrays
+suit_arr <- suit_cube$suitability   # numeric array [cell, taxon, time]
+aoa_arr  <- AOA_cube$AOA            # 0/1 or TRUE/FALSE array [cell, taxon, time]
+
+# 4.3 Mask: set suitability to NA wherever AoA == 0 (or AoA is NA)
+suit_arr_masked <- suit_arr
+suit_arr_masked[ aoa_arr == 0 | is.na(aoa_arr) ] <- NA
+
+# 4.4 Rebuild a stars object with the masked suitability
+suit_cube_masked <- stars::st_as_stars(
+  list(suitability_masked = suit_arr_masked),
+  dimensions = stars::st_dimensions(suit_cube)
+)
+
+# output
+suit_cube_masked
+# stars object with 3 dimensions and 1 attribute
+# attribute(s):
+#                     Min.    1st Qu.     Median      Mean   3rd Qu.      Max.  NA's
+# suitability_masked     0 0.03324332 0.08289195 0.1105777 0.1624449 0.4950672 15281
+# dimension(s):
+#       from   to refsys point                                                        values
+# cell     1 2744 WGS 84 FALSE POLYGON ((6.487442 35.496...,...,POLYGON ((18.61244 46.971...
+# taxon    1    3     NA    NA       Bufo bufo        , Bufotes viridis  , Bombina variegata
+# time     1    2     NA    NA                                              present, future 
+
+# Visual check: this should show suitability only where AoA says "valid"
+plot(suit_cube_masked)
+```
