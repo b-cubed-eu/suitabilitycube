@@ -117,12 +117,19 @@ names(bio_future) <- names(bio_present_aligned)
 bio_present_sel <- bio_present_aligned[[vars_keep]]
 bio_future_sel  <- bio_future[[vars_keep]]
 
-plot(bio_present_sel)
-
 ## 3. GBIF occurrences --------------------------------------------------------
 occ_list <- gbif_occ_list(params$species, params$country_iso, params$gbif_years, params$gbif_limit)
 
 ```
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-18T122427.415.png" alt="cube" width="800"><br>
+  <em> Climatic variables </em>
+</p>
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-10-31T151203.497.png" alt="cube" width="800"><br>
+  <em> Occurrences </em>
+</p>
+
 
 ### Hypervolume
 In this workflow, the hypervolume is empirically estimated from observed species occurrences and their associated environmental predictors. The computation is performed using the R package ```hypervolume``` (Blonder et al., 2018), which applies a Gaussian kernel density estimation (KDE) method (```hypervolume_gaussian```) to model the probability density of species occurrences in environmental space. The hypervolume is computed only for the present period, as it depends on empirical occurrences that are not available for future conditions and could be affected by dispersal limitations or niche shifts.
@@ -159,7 +166,10 @@ hv_by_species
 # $`Bombina variegata`
 # [1] 1881.454
 ```
-
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-18T124754.752.png" alt="cube" width="800"><br>
+  <em> Hypervolume values </em>
+</p>
 ### AOA and DI
 A set of functions was implemented to automate the computation of DI and the AOA for each species. Some functions overlap with those used for hypervolume estimation, ensuring consistency across indicators.
 * ```extract_predictors_at_points```: extracts environmental variable values from raster layers at species occurrence locations (also used in Hypervolume computation)
@@ -212,6 +222,18 @@ aoa_di_by_species$`Bufo bufo`$present
 
 # AOA Threshold: 0.1816886
 ```
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T075806.850.png" alt="cube" width="800"><br>
+  <em>  Environmental Dissimilarity Index (DI) and Area of Applicability (AOA) for Bufo bufo under present climatic conditions. Low DI values (blue) correspond to environments similar to those represented in the occurrence data, while high values (yellow) indicate increasing environmental dissimilarity. The AOA map highlights areas within and outside the model’s environmental domain. </em>
+</p>
+
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T080458.052.png" alt="cube" width="800"><br>
+  <em> Environmental Dissimilarity Index (DI) and Area of Applicability (AOA) for Bufo bufo projected under future conditions (BCC-CSM2-MR, SSP245, 2041–2060).
+The overall increase in DI and reduction of the AOA illustrate a decrease in environmental similarity between present and future conditions.
+ </em>
+</p>
+
 
 ### Cube building
 This phase organizes all previously computed indicators, HV, DI and AOA, into a unified, multidimensional structure that enables consistent spatial, temporal, and taxonomic analysis. The resulting cube is implemented in R using the ```stars``` package, which supports multidimensional data aligned by space, time, and species. Custom functions developed for this workflow are: 
@@ -313,6 +335,13 @@ print(data_cube)
 # time     1    2     NA    NA                                              present, future 
 ```
 
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T090751.698.png" alt="cube" width="800"><br>
+  <em> Visualization of the multi-attribute environmental cube (data_cube), showing the AOA for the three amphibian species (Bufo bufo, Bufotes viridis, Bombina variegata) across present (top) and future (bottom) climatic conditions.
+Each hexagonal cell represents a spatial unit of the analysis grid, with yellow cells indicating areas within the model’s environmental domain (AOA = 1) and blue cells denoting extrapolated or environmentally unsupported areas (AOA = 0).
+ </em>
+</p>
+
 ### Basic usage
 This multidimensional structure allows the exploration, visualization, and comparison of ecological indicators across locations, species, and time, while maintaining full alignment between environmental and spatial data. Some ways the data cube can be used. 
 #### Locate a cell for a given coordinate
@@ -332,6 +361,12 @@ if (is.na(which_cell$cell)) {
 
 # ✅ Point falls inside cell #1361
 ```
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T090914.461.png" alt="cube" width="800"><br>
+  <em> Identification of the grid cell containing the coordinate (12.5°E, 42.5°N). The background shows the bioclimatic variable bio, with the green point marking the queried location and the orange hexagon indicating the selected cell (#1361) that contains it.
+ </em>
+</p>
+
 #### Basic introspection and slice
 Examine the cube’s organization, dimensions, and extent, enabling the inspection of selected indicators or specific subsets.
 ``` r
@@ -394,6 +429,13 @@ DI_diff_cube
 # comparison Bufo bufo - Bufotes viridis        , Bufo bufo - Bombina variegata      , Bufotes viridis - Bombina variegata
 # time                                                                                                    present, future
 ```
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T092349.235.png" alt="cube" width="800"><br>
+  <em> Spatial distribution of pairwise differences in environmental distance between the three modeled amphibian species (Bufo bufo, Bufotes viridis, and Bombina variegata) for both the present (top row) and future (bottom row) scenarios. Each map represents one species pair, where the color scale indicates the difference in environmental dissimilarity between the two species.
+ </em>
+</p>
+
+
 #### Plot DI differences for a single cell 
 Visualizes pairwise DI contrasts within one location, showing which species experience greater environmental distance in the present and future.
 
@@ -411,6 +453,13 @@ df_diff
 # 5       Bufo bufo - Bombina variegata  future -0.29682030
 # 6 Bufotes viridis - Bombina variegata  future -0.17806079
 ```
+
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T092623.470.png" alt="cube" width="800"><br>
+  <em> Each bar represents the difference in DI between species pairs (sp1 − sp2) in the present (red) and future (blue). Negative values indicate that the first species in the pair is environmentally closer to its training conditions than the second. 
+ </em>
+</p>
+
 #### Summarize AOA coverage
 Calculates the proportion of the study area that falls inside or outside the Area of Applicability for each species and time period.
 ``` r
@@ -433,6 +482,13 @@ print(head(aoa_counts))
 # 5 Bufo bufo future      1       6
 # 6 Bufo bufo future     NA    1928
 ```
+
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-03T153053.752.png" alt="cube" width="800"><br>
+  <em> Bars show the total number of grid cells per species classified as inside (orange) or outside (green) the model’s AOA for present and future scenarios. Gray bars correspond to masked or unavailable areas. The substantial decline in orange cells from present to future underscores the spatial contraction of environmentally supported regions under climate change.
+ </em>
+</p>
+
 ### Application to SDMs
 After constructing and exploring the multi-attribute environmental cube, the next step is to connect these indicators to an actual species distribution model (SDM).
 We employ the R package ```dismo``` (Hijmans et al., 2023), one of the most established frameworks for building and evaluating SDMs.
@@ -481,6 +537,13 @@ suit_present_bufo <- raster::predict(env_present_rs, bc_bufo)
 # 1.6 Predict habitat suitability under future climate
 suit_future_bufo  <- raster::predict(env_future_rs,  bc_bufo)
 ```
+
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T095306.553.png" alt="cube" width="800"><br>
+  <em> Suitability maps of Bufotes viridis derived from a correlative Species Distribution Model (SDM) using the dismo::bioclim algorithm. The right panel shows the current climatic suitability, while the left panel projects future conditions under a changing climate scenario. 
+ </em>
+</p>
+
 #### Build suitability cube
 The suitability maps produced by the SDMs are then converted into a unified stars data cube. This step ensures that predicted suitability values are expressed on the same spatial grid and share the same species (```taxon```) and temporal (```time```) dimensions as the environmental indicators. The resulting cube enables consistent comparison and masking operations across indicators. 
 
@@ -650,3 +713,9 @@ suit_cube_masked
 # Visual check: this should show suitability only where AoA says "valid"
 plot(suit_cube_masked)
 ```
+
+<p align="center">
+  <img src="images/plot_zoom_png%20-%202025-11-19T100402.252.png" alt="cube" width="800"><br>
+  <em> The figure shows the AOA-filtered habitat suitability for the three modeled amphibian species (Bufo bufo, Bufotes viridis, Bombina variegata) under present (top row) and future (bottom row) climate conditions.
+ </em>
+</p>
