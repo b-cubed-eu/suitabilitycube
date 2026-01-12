@@ -430,7 +430,7 @@ DI_diff_cube
 # time                                                                                                    present, future
 ```
 <p align="center">
-  <img src="images/plot_zoom_png%20-%202025-11-19T092349.235.png" alt="cube" width="800"><br>
+  <img src="images/plot_zoom_png%20-%202025-11-19T092349.235.png" alt="cube" width="900"><br>
   <em> Spatial distribution of pairwise differences in environmental distance between the three modeled amphibian species (Bufo bufo, Bufotes viridis, and Bombina variegata) for both the present (top row) and future (bottom row) scenarios. Each map represents one species pair, where the color scale indicates the difference in environmental dissimilarity between the two species.
  </em>
 </p>
