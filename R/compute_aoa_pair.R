@@ -19,3 +19,4 @@ compute_aoa_pair <- function(env_train_df, new_present, new_future) {
     future  = CAST::aoa(newdata = new_future,  train = trn, variables = vars)
   )
 }
+
