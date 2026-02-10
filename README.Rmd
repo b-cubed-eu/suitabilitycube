@@ -7,6 +7,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Suitability Cube 
+
 The **Suitability Cube (SC)** is a reproducible, multidimensional structure designed to critically evaluate the outcomes of species distribution models (SDMs) in relation to the environmental data on which they are built. By organizing information across space, time, and taxa, the SC links species occurrence records with environmental predictors within a unified analytical framework, allowing a more transparent assessment of habitat suitability patterns and model reliability.
 
 SC incorporates measures of environmental distance, which quantify how different the environmental conditions at prediction sites are from those represented in the training data. This allows identifying where model projections are environmentally supported and where they involve extrapolation into unfamiliar conditions. It also integrates metrics of niche breadth (derived from hypervolumes) to describe the ecological space occupied by each species and the Area of Applicability (AOA) to delineate the environmental domain within which model predictions can be considered valid.
@@ -14,6 +15,7 @@ SC incorporates measures of environmental distance, which quantify how different
 By integrating these components, the SC provides a coherent system for comparing species and time periods, highlighting environmentally uncertain regions, and identifying where models can be meaningfully interpreted. Ultimately, the Suitability Cube enhances the critical evaluation of SDMs by linking what the model predicts to where those predictions should be trusted, fostering more transparent, reproducible, and ecologically grounded modelling practices. 
 
 ## Key concepts 
+
 * **Hypervolume (HV)**: it represents a species’ ecological niche as an n-dimensional region defined by environmental variables, following the concept introduced by Hutchinson (1957). Each axis corresponds to an independent and ecologically relevant factor, such as temperature or precipitation, and the resulting hypervolume encompasses all combinations of conditions under which the species can persist.
 
 * **Environmental Distance (Dissimilarity Index, DI)**: It quantifies how different the environmental conditions at a prediction site are from those represented in the training (occurrence) data. Following the method of Meyer & Pebesma (2021), DI is computed as a standardized distance in a multidimensional predictor space that has been (i) standardized, (ii) weighted by variable importance, and (iii) expressed relative to typical distances between training samples. This provides a unitless, comparable measure of environmental novelty
@@ -21,6 +23,7 @@ By integrating these components, the SC provides a coherent system for comparing
 * **Area of Applicability (AOA)**: the Area of Applicability (AOA) defines the spatial domain where model predictions can be considered environmentally supported by the training data. It is computed directly from the Dissimilarity Index (DI) and provides a binary, spatially explicit assessment of whether a prediction site lies inside or outside the environmental space represented during model training (Meyer & Pebesma 2021).
 
 ## Conceptual workflow 
+
 The conceptual workflow underlying the Suitability Cube (SC) consists of 4 main phases: **data acquisition**, **pre-processing**, **indicator computation**, and **cube building**. The workflow is organized into sequential, reproducible steps that ensure a coherent progression from data acquisition to cube construction while remaining flexible enough to accommodate different user needs and modelling contexts.
 
 1. **Data download**. In the first stage, the necessary input data are collected and harmonized: the **national boundary**, **bioclimatic predictors** and **species occurrence data**. 
@@ -32,12 +35,10 @@ To reduce collinearity among predictors, a correlation-based variable selection 
 
 4. **Cube building**. This phase integrates all indicators into a unified, three-dimensional structure that organizes information across space, species, and time.
 
-
 <p align="center">
   <img src="images/GBIF%20occurrences%20from%20rgbif.png" width="600"><br>
   <em>Workflow</em>
 </p>
-
 
 ## Installation
 
@@ -55,6 +56,7 @@ library(suitabilitycube)
 ```
 
 Other packages needed
+
 ```{r, include = FALSE}
 library(sf)
 library(tidyverse)
@@ -104,8 +106,6 @@ Species occurrence records were retrieved from GBIF using the R package ```rgbif
 * Years = 2010–2020, 
 * Record cap = 20,000 per species.
 
-
-
 ```{r}
 # country boundary
 country_vec <- geodata::gadm(params$country_name, level = 0, path = params$outdir)
@@ -151,9 +151,8 @@ occ_list <- gbif_occ_list(params$species, params$country_iso, params$gbif_years,
   <em> Occurrences </em>
 </p>
 
-
-
 ### Hypervolume
+
 In this workflow, the hypervolume is empirically estimated from observed species occurrences and their associated environmental predictors. The computation is performed using the R package ```hypervolume``` (Blonder et al., 2018), which applies a Gaussian kernel density estimation (KDE) method (```hypervolume_gaussian```) to model the probability density of species occurrences in environmental space. The hypervolume is computed only for the present period, as it depends on empirical occurrences that are not available for future conditions and could be affected by dispersal limitations or niche shifts.
 
 * ```extract_predictors_at_points```: extracts raster values at point locations, keeps only selected predictor variables, removes rows with missing values, and drops numeric predictors with zero variance.
@@ -210,10 +209,8 @@ for (sp in params$species) {
 aoa_di_by_species$`Bufo bufo`$present
 ```
 
-
-
-
 ### Cube building
+
 This phase organizes all previously computed indicators, HV, DI and AOA, into a unified, multidimensional structure that enables consistent spatial, temporal, and taxonomic analysis. The resulting cube is implemented in R using the ```stars``` package, which supports multidimensional data aligned by space, time, and species. Custom functions developed for this workflow are: 
 
 * ```as_stars_on_grid```: aggregates raster values to polygon grid cells and converts outputs to stars format
@@ -225,7 +222,6 @@ This phase organizes all previously computed indicators, HV, DI and AOA, into a 
 * ```merge_cubes```: combines all indicator cubes into a single multi-attribute data cube aligned by dimensions
 
 The process is made by the following steps, that aim to reduce the dimensionality and compress all the information in a single, reproducible object: 
-
 
 ```{r}
 # inputs & grid params
@@ -283,7 +279,9 @@ data_cube <- stars::st_set_dimensions(data_cube, "time",  values = c("present","
 # sanity check
 print(stars::st_dimensions(data_cube))
 ```
+
 ### Output
+
 The workflow produces a multi-attribute environmental data cube, implemented as a ```stars``` object in R.
 The cube integrates the three indicators, Area of Applicability, Environmental Distance, and Hypervolume, into a single, coherent structure that supports spatial, temporal, and taxonomic analysis of model-related indicators.
 The cube has three dimensions: ```cell```, ```taxon```, and ```time```, corresponding respectively to spatial grid units, species, and temporal steps (present and future). Each cell contains the computed attributes.
@@ -298,10 +296,12 @@ The cube has three dimensions: ```cell```, ```taxon```, and ```time```, correspo
 print(data_cube)
 ```
 
-
 ### Basic usage
+
 This multidimensional structure allows the exploration, visualization, and comparison of ecological indicators across locations, species, and time, while maintaining full alignment between environmental and spatial data. Some ways the data cube can be used. 
+
 #### Locate a cell for a given coordinate
+
 Identifies which grid cell a given geographic coordinate belongs to and displays it on a map for visual inspection.
 ``` {r}
 # Define a point (lon, lat) in EPSG:4326
@@ -319,6 +319,7 @@ if (is.na(which_cell$cell)) {
 ```
 
 #### Basic introspection and slice
+
 Examine the cube’s organization, dimensions, and extent, enabling the inspection of selected indicators or specific subsets.
 ``` {r}
 # Spatial extent of the cube (bbox of all cells)
@@ -335,7 +336,9 @@ data_cube[,1361, , 1]
 # Cell 1361, both species, FUTURE (time = 2)
 data_cube[,1361, , 2]
 ``` 
+
 #### Build a pairwise DI-difference cube (cell x comparison x time)
+
 Creates a new cube that expresses the difference in environmental dissimilarity between species, per cell and time step, highlighting which species occupy more novel environmental conditions.
 ``` {r}
 # Example: all pairwise differences (default)
@@ -343,8 +346,8 @@ DI_diff_cube <- build_DI_diff_cube(data_cube)
 DI_diff_cube
 ```
 
-
 #### Plot DI differences for a single cell 
+
 Visualizes pairwise DI contrasts within one location, showing which species experience greater environmental distance in the present and future.
 
 ```  {r}
@@ -356,6 +359,7 @@ df_diff
 ```
 
 #### Summarize AOA coverage
+
 Calculates the proportion of the study area that falls inside or outside the Area of Applicability for each species and time period.
 ``` {r}
 aoa_df <- as.data.frame(data_cube["AOA"]) |>
@@ -369,8 +373,8 @@ aoa_counts <- aoa_df |>
 print(head(aoa_counts))
 ```
 
-
 ### Application to SDMs
+
 After constructing and exploring the multi-attribute environmental cube, the next step is to connect these indicators to an actual species distribution model (SDM).
 We employ the R package ```dismo``` (Hijmans et al., 2023), one of the most established frameworks for building and evaluating SDMs.
 
@@ -385,6 +389,7 @@ This section illustrates:
 **No new functions are introduced in this section**. The process reuses the previously defined helper ```as_stars_on_grid```.
 
 #### SDM fitting and alignment with SC's structure
+
 For each species (here: Bufo bufo, Bufotes viridis, Bombina variegata):
 
 * Extract GBIF occurrences from the previously downloaded dataset (```occ_list```), and ensure they are in geographic coordinates (EPSG:4326)
@@ -441,6 +446,7 @@ plot(suit_future_bufo, col = viridis(100))
 ```
 
 #### Build suitability cube
+
 The suitability maps produced by the SDMs are then converted into a unified stars data cube. This step ensures that predicted suitability values are expressed on the same spatial grid and share the same species (```taxon```) and temporal (```time```) dimensions as the environmental indicators. The resulting cube enables consistent comparison and masking operations across indicators. 
 
 1. Define species order. The vector ```species_vec``` is defined and checked to ensure that all species appear in the correct order across analyses
@@ -485,7 +491,6 @@ suit_present_grid_list <- lapply(species_vec, function(sp) {
 })
 names(suit_present_grid_list) <- species_vec
 
-
 suit_future_grid_list <- lapply(species_vec, function(sp) {
   as_stars_on_grid(
     sr   = terra::rast(suitability_future_list[[sp]]),
@@ -519,7 +524,9 @@ names(suit_cube) <- "suitability"
 
 plot(suit_cube)
 ```
+
 #### Merge suitability into the global data cube
+
 After building the standalone suitability cube (suit_cube), this step integrates it into the main ```data_cube``` that already contains AOA, environmental distance (DI), and hypervolume (HV). The goal is to obtain a single multi-attribute cube where all indicators, including modeled suitability, are co-located in the same data structure.
 
 * **Match dimensions**. The taxonomic (taxon) and temporal (time) dimensions of suit_cube are explicitly aligned to those already defined in data_cube. 
@@ -539,6 +546,7 @@ The result is a single, enriched data_cube that stores:
 Multiple attributes: AOA, DI, HV, suitability.
 
 This unified structure can then be queried, sliced, plotted, or summarized as one coherent object.
+
 ``` {r}
 # 3.1 Align taxon/time labels to match the existing data_cube
 suit_cube <- stars::st_set_dimensions(
@@ -560,7 +568,9 @@ data_cube <- c(data_cube, suit_cube)
 print(stars::st_dimensions(data_cube))
 data_cube
 ```
+
 #### Apply AOA mask to SDM
+
 Species distribution models often produce suitability predictions across the entire study area, including regions where extrapolation occurs beyond the environmental conditions used for model calibration. AOA identifies whether predictions fall within a known environmental space (```AOA = 1```) or outside it (```AOA = 0```).
 
 * **Align dimensions**. The taxonomic and temporal dimensions of the suitability cube (```suit_cube```) are aligned with those of the AOA cube (```AOA_cube```) using ```st_set_dimensions```, ensuring element-wise correspondence between arrays.
@@ -570,6 +580,7 @@ Species distribution models often produce suitability predictions across the ent
 * **Rebuild the masked cube**. A new ```stars``` object, ```suit_cube_masked```, is generated from the masked array while preserving the same spatial, taxonomic, and temporal dimensions as the original suitability cube.
 
 The resulting ```suit_cube_masked``` retains suitability values only where the SDM operates within environmentally supported conditions. This step connects model predictions (“what the model predicts”) with their environmental validity (“where the model should be trusted”), providing a spatially explicit assessment of model transferability and reliability.
+
 ``` {r}
 # 4.1 First, be sure suit_cube and AOA_cube share the same dimension labels
 suit_cube <- stars::st_set_dimensions(
@@ -604,4 +615,3 @@ suit_cube_masked
 
 plot(suit_cube_masked)
 ```
-
