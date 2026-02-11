@@ -252,13 +252,6 @@ for (sp in params$species) {
 }
 ```
 
-    ## Note that the formula used for the Silverman estimator differs in version 3 compared to prior versions of this package.
-    ## Use method='silverman-1d' to replicate prior behavior.
-    ## Note that the formula used for the Silverman estimator differs in version 3 compared to prior versions of this package.
-    ## Use method='silverman-1d' to replicate prior behavior.
-    ## Note that the formula used for the Silverman estimator differs in version 3 compared to prior versions of this package.
-    ## Use method='silverman-1d' to replicate prior behavior.
-
 ``` r
 # output 
 hv_by_species
