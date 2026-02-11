@@ -165,7 +165,7 @@ In this workflow, the hypervolume is empirically estimated from observed species
 
 * Wrapper loop: iterates over all species to compute individual hypervolume values for the present period
 
-``` {r}
+``` {r, include = FALSE}
 pred_vars_present <- names(bio_present_sel)
 hv_by_species     <- setNames(vector("list", length(params$species)), params$species)
 
