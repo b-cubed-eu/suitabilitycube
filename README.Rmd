@@ -194,7 +194,7 @@ A set of functions was implemented to automate the computation of DI and the AOA
 
 * Wrapper loop: iterates over all species to compute per-species DI and AOA values for the present and future periods, skipping species with insufficient training data.
 
-```{r}
+```{r, eval=FALSE}
 aoa_di_by_species <- setNames(vector("list", length(params$species)), params$species)
 
 for (sp in params$species) {
@@ -223,7 +223,7 @@ This phase organizes all previously computed indicators, HV, DI and AOA, into a 
 
 The process is made by the following steps, that aim to reduce the dimensionality and compress all the information in a single, reproducible object: 
 
-```{r}
+```{r, eval=FALSE}
 # inputs & grid params
 species_vec  <- params$species
 cellsize_deg <- params$grid_cellsize_deg
