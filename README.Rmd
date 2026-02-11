@@ -44,7 +44,7 @@ To reduce collinearity among predictors, a correlation-based variable selection 
 
 You can install the development version of suitabilitycube from GitHub with:
 
-```{r install, eval=FALSE}
+```{r install, include = TRUE}
 install.packages("remotes")
 remotes::install_github("b-cubed-eu/suitabilitycube")
 ```
