@@ -1,6 +1,9 @@
-
 # Suitability Cube
 [![DOI](https://zenodo.org/badge/1129734789.svg)](https://doi.org/10.5281/zenodo.19595840)
+
+<p align="center">
+<img width="256" height="256" alt="457908ea-80b8-4e39-b706-0441f201d5fa" src="https://github.com/user-attachments/assets/14422636-cfa4-4f97-ad35-996243241cc9" />
+</p>
 
 The **Suitability Cube (SC)** is a reproducible, multidimensional
 structure designed to critically evaluate the outcomes of species
